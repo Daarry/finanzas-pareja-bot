@@ -1,5 +1,5 @@
 // Webhook de WhatsApp Cloud API: verifica (GET) y recibe mensajes (POST).
-import { personFromNumber } from "../lib/people.js";
+import { personFromNumber, otherPerson, P1, P2 } from "../lib/people.js";
 import { parseMessage } from "../lib/parse.js";
 import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
 import { sendText } from "../lib/whatsapp.js";
@@ -24,7 +24,7 @@ const HELP =
   "• «40 cena fuera, común» (gasto compartido)\n" +
   "• «nómina 1450» (ingreso)\n" +
   "• «gimnasio 35, fijo» (gasto fijo tuyo)\n" +
-  "• «le he pasado 100 a Mimi» (liquidación)\n" +
+  "• «le he pasado 100 a " + P2 + "» (liquidación)\n" +
   "• «nuevo objetivo viaje 2000» (meta de ahorro)\n" +
   "• «deuda tarjeta 600 cuota 50» (deuda)\n" +
   "• «el último es personal» (corrige el tipo del último)\n" +
@@ -85,7 +85,7 @@ async function handleMessage(from, person, text) {
     const tipo = tipoFromText(text) || p.tipo || "Común"; // palabra clave manda sobre la IA
     const categoria =
       p.categoria || categorize(text) || (tipo === "Ingreso" ? "Otro ingreso" : "Otros");
-    const other = person === "Darry" ? "Mimi" : "Darry";
+    const other = otherPerson(person);
     const quien = tipo === "Liquidación" ? liquidacionQuien(text, person, other) : p.quien || person;
     const fecha = /^\d{4}-\d{2}-\d{2}$/.test(p.fecha || "") ? p.fecha : todayISO();
     const concepto = p.concepto || conceptoFrom(text) || categoria;
@@ -186,7 +186,7 @@ async function handleMessage(from, person, text) {
   if (p.intent === "consulta") {
     if (p.consulta === "saldo") {
       const s = await saldos();
-      return sendText(from, `💳 En las cuentas:\n• Darry: ${s.darry || "—"}\n• Mimi: ${s.mimi || "—"}`);
+      return sendText(from, `💳 En las cuentas:\n• ${P1}: ${s.darry || "—"}\n• ${P2}: ${s.mimi || "—"}`);
     }
     if (p.consulta === "patrimonio") {
       const pat = await readPatrimonio();
