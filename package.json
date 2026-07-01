@@ -1,0 +1,11 @@
+{
+  "name": "finanzas-pareja-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bot de WhatsApp que apunta y consulta el Excel/Google Sheet de Finanzas Pareja",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  }
+}
