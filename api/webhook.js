@@ -1,9 +1,10 @@
 // Webhook de WhatsApp Cloud API: verifica (GET) y recibe mensajes (POST).
 import { personFromNumber, otherPerson, P1, P2 } from "../lib/people.js";
 import { parseMessage } from "../lib/parse.js";
-import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
+import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, updateLastCategoria, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
 import { sendText } from "../lib/whatsapp.js";
-import { categorize, conceptoFrom, tipoFromText, liquidacionQuien } from "../lib/categorize.js";
+import { categorize, conceptoFrom, tipoFromText, liquidacionQuien, transferTipo } from "../lib/categorize.js";
+import { CATEGORIAS, classifyCategory } from "../lib/parse.js";
 
 const nums = (t) => [...(t || "").matchAll(/\d+(?:[.,]\d{1,2})?/g)].map((x) => parseFloat(x[0].replace(",", ".")));
 const cleanName = (t) =>
@@ -82,9 +83,12 @@ async function handleMessage(from, person, text) {
       if (num) importe = parseFloat(num[0].replace(",", "."));
     }
     if (!importe || importe <= 0) return sendText(from, "¿Qué importe? Ej: «40 cena, común».");
-    const tipo = tipoFromText(text) || p.tipo || "Común"; // palabra clave manda sobre la IA
-    const categoria =
-      p.categoria || categorize(text) || (tipo === "Ingreso" ? "Otro ingreso" : "Otros");
+    // Prioridad tipo: transferencia/bizum (por destinatario) → palabra clave → IA → Común
+    const tipo = transferTipo(text, P1, P2) || tipoFromText(text) || p.tipo || "Común";
+    // Categoría: IA principal (si no es "Otros") → palabras clave → clasificador IA → Otros
+    let categoria = p.categoria && p.categoria !== "Otros" ? p.categoria : categorize(text);
+    if (!categoria) categoria = await classifyCategory(p.concepto || text);
+    if (!categoria) categoria = tipo === "Ingreso" ? "Otro ingreso" : "Otros";
     const other = otherPerson(person);
     const quien = tipo === "Liquidación" ? liquidacionQuien(text, person, other) : p.quien || person;
     const fecha = /^\d{4}-\d{2}-\d{2}$/.test(p.fecha || "") ? p.fecha : todayISO();
@@ -176,17 +180,28 @@ async function handleMessage(from, person, text) {
   }
 
   if (p.intent === "corregir") {
+    const nuevaCat = (p.correccion_categoria && CATEGORIAS.includes(p.correccion_categoria)) ? p.correccion_categoria : categorize(text);
     const nuevoTipo = p.correccion_tipo || tipoFromText(text);
-    if (!nuevoTipo) return sendText(from, "¿A qué tipo lo cambio? Ej: «el último es personal» (común / personal / fijo).");
-    const upd = await updateLastTipo(person, nuevoTipo);
-    if (!upd) return sendText(from, "No encuentro ningún movimiento tuyo que corregir.");
-    return sendText(from, `✏️ Corregido: tu último apunte (${upd.concepto || ""} ${upd.importe || ""}) ahora es *${nuevoTipo}*.`);
+    if (nuevaCat) {
+      const upd = await updateLastCategoria(person, nuevaCat);
+      if (!upd) return sendText(from, "No encuentro ningún movimiento tuyo que corregir.");
+      return sendText(from, `✏️ Corregido: tu último apunte (${upd.concepto || ""} ${upd.importe || ""}) ahora es categoría *${nuevaCat}*.`);
+    }
+    if (nuevoTipo) {
+      const upd = await updateLastTipo(person, nuevoTipo);
+      if (!upd) return sendText(from, "No encuentro ningún movimiento tuyo que corregir.");
+      return sendText(from, `✏️ Corregido: tu último apunte (${upd.concepto || ""} ${upd.importe || ""}) ahora es *${nuevoTipo}*.`);
+    }
+    return sendText(from, "¿Qué cambio? Ej: «el último es personal» (tipo) o «el último es ocio» (categoría).");
   }
 
   if (p.intent === "consulta") {
     if (p.consulta === "saldo") {
       const s = await saldos();
       return sendText(from, `💳 En las cuentas:\n• ${P1}: ${s.darry || "—"}\n• ${P2}: ${s.mimi || "—"}`);
+    }
+    if (p.consulta === "categorias") {
+      return sendText(from, "🏷️ Categorías disponibles:\n" + CATEGORIAS.map((c) => "• " + c).join("\n"));
     }
     if (p.consulta === "patrimonio") {
       const pat = await readPatrimonio();
