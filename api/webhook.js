@@ -85,6 +85,10 @@ async function handleMessage(from, person, text) {
     if (!importe || importe <= 0) return sendText(from, "¿Qué importe? Ej: «40 cena, común».");
     // Prioridad tipo: transferencia/bizum (por destinatario) → palabra clave → IA → Común
     const tipo = transferTipo(text, P1, P2) || tipoFromText(text) || p.tipo || "Común";
+    // Bizum sin dirección clara: preguntar si lo envió o lo recibió
+    if (tipo === "AMBIGUO") {
+      return sendText(from, `🤔 ¿Ese bizum de ${importe} € lo has *enviado* o *recibido*?\nEscríbelo así:\n• «bizum a [nombre] ${importe}» → lo enviaste (gasto)\n• «bizum de [nombre] ${importe}» → lo recibiste (ingreso)`);
+    }
     // Categoría: IA principal (si no es "Otros") → palabras clave → clasificador IA → Otros
     let categoria = p.categoria && p.categoria !== "Otros" ? p.categoria : categorize(text);
     if (!categoria) categoria = await classifyCategory(p.concepto || text);
