@@ -1,7 +1,7 @@
 // Webhook de WhatsApp Cloud API: verifica (GET) y recibe mensajes (POST).
 import { personFromNumber, otherPerson, P1, P2 } from "../lib/people.js";
 import { parseMessage } from "../lib/parse.js";
-import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, updateLastCategoria, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
+import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, updateLastCategoria, deleteLastMovement, gastosPorPersona, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
 import { sendText } from "../lib/whatsapp.js";
 import { categorize, conceptoFrom, tipoFromText, liquidacionQuien, transferTipo } from "../lib/categorize.js";
 import { CATEGORIAS, classifyCategory } from "../lib/parse.js";
@@ -29,6 +29,7 @@ const HELP =
   "• «nuevo objetivo viaje 2000» (meta de ahorro)\n" +
   "• «deuda tarjeta 600 cuota 50» (deuda)\n" +
   "• «el último es personal» (corrige el tipo del último)\n" +
+  "• «borra el último» (elimina el último apunte)\n" +
   "• «la casa vale 200000, en 5 años» · «podemos ahorrar 500 al mes» (plan de casa)\n" +
   "• «quiero comprar un sofá de 800» (compra grande a decidir)\n\n" +
   "💡 Truco: añade *común*, *personal* o *fijo* al mensaje y lo respeto siempre.\n\n" +
@@ -183,6 +184,12 @@ async function handleMessage(from, person, text) {
     return sendText(from, `🗓️ Fondo añadido:\n• ${nombre}: ${costeAnual} €/año\n• Aparta ${(costeAnual / 12).toFixed(2)} €/mes y no te pillará por sorpresa.`);
   }
 
+  if (p.intent === "borrar") {
+    const del = await deleteLastMovement(person);
+    if (!del) return sendText(from, "No encuentro ningún movimiento tuyo que borrar.");
+    return sendText(from, `🗑️ Borrado: ${del.concepto || ""} ${del.importe || ""} (${del.tipo || ""}).\nSi te has equivocado, vuélvelo a apuntar.`);
+  }
+
   if (p.intent === "corregir") {
     const nuevaCat = (p.correccion_categoria && CATEGORIAS.includes(p.correccion_categoria)) ? p.correccion_categoria : categorize(text);
     const nuevoTipo = p.correccion_tipo || tipoFromText(text);
@@ -206,6 +213,12 @@ async function handleMessage(from, person, text) {
     }
     if (p.consulta === "categorias") {
       return sendText(from, "🏷️ Categorías disponibles:\n" + CATEGORIAS.map((c) => "• " + c).join("\n"));
+    }
+    if (p.consulta === "gastos") {
+      const mes = /^\d{4}-\d{2}$/.test(p.mes || "") ? p.mes : currentMonth();
+      const g = await gastosPorPersona(mes);
+      const eur = (n) => (n || 0).toFixed(2).replace(".", ",") + " €";
+      return sendText(from, `💸 Gastos de ${mes} (por persona):\n• ${P1}: ${eur(g[P1])}\n• ${P2}: ${eur(g[P2])}`);
     }
     if (p.consulta === "patrimonio") {
       const pat = await readPatrimonio();
