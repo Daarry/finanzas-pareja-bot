@@ -214,10 +214,14 @@ async function handleMessage(from, person, text) {
     if (p.consulta === "categorias") {
       return sendText(from, "🏷️ Categorías disponibles:\n" + CATEGORIAS.map((c) => "• " + c).join("\n"));
     }
-    if (p.consulta === "gastos") {
+    if (p.consulta === "gastos" || p.consulta === "gastos_casa") {
       const mes = /^\d{4}-\d{2}$/.test(p.mes || "") ? p.mes : currentMonth();
-      const g = await gastosPorPersona(mes);
       const eur = (n) => (n || 0).toFixed(2).replace(".", ",") + " €";
+      if (p.consulta === "gastos_casa") {
+        const g = await gastosPorPersona(mes, ["Común"]);
+        return sendText(from, `🏠 Gastos de CASA (${mes}), lo que ha puesto cada uno:\n• ${P1}: ${eur(g[P1])}\n• ${P2}: ${eur(g[P2])}\n• Total: ${eur((g[P1] || 0) + (g[P2] || 0))}`);
+      }
+      const g = await gastosPorPersona(mes);
       return sendText(from, `💸 Gastos de ${mes} (por persona):\n• ${P1}: ${eur(g[P1])}\n• ${P2}: ${eur(g[P2])}`);
     }
     if (p.consulta === "patrimonio") {
