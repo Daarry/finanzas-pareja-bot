@@ -1,7 +1,7 @@
 // Webhook de WhatsApp Cloud API: verifica (GET) y recibe mensajes (POST).
 import { personFromNumber, otherPerson, P1, P2 } from "../lib/people.js";
 import { parseMessage } from "../lib/parse.js";
-import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, updateLastCategoria, deleteLastMovement, gastosPorPersona, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
+import { appendMovement, resumenMes, saldos, currentMonth, addObjetivo, addDeuda, fondoEmergencia, listObjetivos, listDeudas, updateLastTipo, updateLastCategoria, deleteMovement, gastosPorPersona, prevision, setCasa, readCasa, addCompraGrande, addFondo, readAmortizacion, readPatrimonio } from "../lib/sheets.js";
 import { sendText } from "../lib/whatsapp.js";
 import { categorize, conceptoFrom, tipoFromText, liquidacionQuien, transferTipo } from "../lib/categorize.js";
 import { CATEGORIAS, classifyCategory } from "../lib/parse.js";
@@ -185,9 +185,16 @@ async function handleMessage(from, person, text) {
   }
 
   if (p.intent === "borrar") {
-    const del = await deleteLastMovement(person);
-    if (!del) return sendText(from, "No encuentro ningún movimiento tuyo que borrar.");
-    return sendText(from, `🗑️ Borrado: ${del.concepto || ""} ${del.importe || ""} (${del.tipo || ""}).\nSi te has equivocado, vuélvelo a apuntar.`);
+    const n = nums(text);
+    const criterio = {};
+    if (Number(p.importe) > 0) criterio.importe = Number(p.importe);
+    else if (n.length) criterio.importe = n[0];
+    else if (p.concepto) criterio.concepto = p.concepto;
+    const del = await deleteMovement(person, criterio);
+    if (del.notFound) {
+      return sendText(from, criterio.importe ? `No encuentro un movimiento tuyo de ${criterio.importe} €.` : "No encuentro ningún movimiento tuyo que borrar.");
+    }
+    return sendText(from, `🗑️ Borrado: ${del.concepto || ""} ${del.importe || ""} € (${del.tipo || ""}).\nSi te has equivocado, vuélvelo a apuntar.`);
   }
 
   if (p.intent === "corregir") {
